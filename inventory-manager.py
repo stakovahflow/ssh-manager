@@ -301,30 +301,25 @@ def deduplicate_csv_file(csv_filename):
 
 def main():
     parser = argparse.ArgumentParser(description="Manage user credentials in a CSV file.")
-    parser.add_argument("--csv", required=True, help="CSV File name")
+    parser.add_argument("--csv", help="CSV File name")
     
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--add", action="store_true", help="Add host entry")
-    group.add_argument("--remove", action="store_true", help="Remove host entry")
-    group.add_argument("--update", action="store_true", help="Update host entry")
-    group.add_argument("--view", action="store_true", help="View host entry")
-    group.add_argument("--deduplicate", action="store_true", help="Deduplicate the CSV file")
+    operations = parser.add_mutually_exclusive_group(required=True)
+    operations.add_argument("--newkey", action="store_true", help="Generate a new Fernet key")
+    operations.add_argument("--add", action="store_true", help="Add host entry")
+    operations.add_argument("--remove", action="store_true", help="Remove host entry")
+    operations.add_argument("--update", action="store_true", help="Update host entry")
+    operations.add_argument("--view", action="store_true", help="View host entry")
+    operations.add_argument("--deduplicate", action="store_true", help="Deduplicate the CSV file")
 
-    parser.add_argument("--host", help="Hostname")
-    parser.add_argument("--port", default=22, type=int, help="SSH Port")
-    parser.add_argument("--user", default=None, help="Username")
-    parser.add_argument("--password", default=None, help="Password (plaintext)")
+    parser.add_argument("--host", help="SSH host address")
+    parser.add_argument("--port", default=22, type=int, help="SSH port")
+    parser.add_argument("--user", default=None, help="SSH username")
+    parser.add_argument("--password", default=None, help="Password (plaintext) (please use with care)")
     parser.add_argument("--decode", action="store_true", help="Decode password when viewing")
     parser.add_argument("--key", default="key.txt", help="Define security key (base64-encoded encryption key for securely storing passwords in CSV file.)")
-    parser.add_argument("--newkey", action="store_true", help="Generate a new Fernet key")
-
+    
+    
     args = parser.parse_args()
-    csv_filename = args.csv
-    host = args.host
-    port = args.port
-    user = args.user
-    password = args.password
-    keyfile = args.key
 
     if args.newkey:
         newkey = args.key
@@ -337,7 +332,12 @@ def main():
             generate_fernet_key(newkey)
             print(f'Key file created: {newkey}')
             exit(0)
-
+    csv_filename = args.csv
+    host = args.host
+    port = args.port
+    user = args.user
+    password = args.password
+    keyfile = args.key
     if args.deduplicate:
         print(f'Deduplicating {csv_filename}')
         deduplicate_csv_file(csv_filename)
