@@ -301,7 +301,7 @@ def deduplicate_csv_file(csv_filename):
 
 def main():
     parser = argparse.ArgumentParser(description="Manage user credentials in a CSV file.")
-    parser.add_argument("--csv", help="CSV File name")
+    parser.add_argument("--csv", default='hosts.csv', help="CSV File name")
     
     operations = parser.add_mutually_exclusive_group(required=True)
     operations.add_argument("--newkey", action="store_true", help="Generate a new Fernet key")
