@@ -315,7 +315,7 @@ def main():
     parser.add_argument("--port", default=22, type=int, help="SSH port")
     parser.add_argument("--user", default=None, help="SSH username")
     parser.add_argument("--password", default=None, help="Password (plaintext) (please use with care)")
-    parser.add_argument("--decode", action="store_true", help="Decode password when viewing")
+    parser.add_argument("--decrypt", action="store_true", help="Decode password when viewing")
     parser.add_argument("--key", default="key.txt", help="Define security key (base64-encoded encryption key for securely storing passwords in CSV file.)")
     
     
@@ -345,7 +345,7 @@ def main():
         return
 
     if args.view:
-        view_host(csv_filename, host, port, user, keyfile, decode_password=args.decode)
+        view_host(csv_filename, host, port, user, keyfile, decode_password=args.decrypt)
 
     if args.add:
         add_host(csv_filename, host, port, user, keyfile, password)
