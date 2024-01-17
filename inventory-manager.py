@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 # Version: 0.0.11
-# Last modified: 2024-01-10
+# Last modified: 2024-01-16
 # Description: Application to manage user credentials
+version = 20240116001
 
 import csv
 import argparse
 import os
 import getpass
 import base64
+import sys
 from cryptography.fernet import Fernet
 
 # Global Variables:
@@ -318,9 +320,12 @@ def main():
     parser.add_argument("--decrypt", action="store_true", help="Decode password when viewing")
     parser.add_argument("--key", default="key.txt", help="Define security key (base64-encoded encryption key for securely storing passwords in CSV file.)")
     
-    
+    parser.add_argument("--version", action="store_true", help="Show version and exit")
     args = parser.parse_args()
-
+    
+    if args.version:
+        print(f'Application version: {version}')
+        exit(0)
     if args.newkey:
         newkey = args.key
         if os.path.exists(newkey):
