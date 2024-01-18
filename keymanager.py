@@ -520,7 +520,8 @@ def main():
         stop_blinker = True
         blinker_thread.join()
         logging.error(f'User cancelled operation')
-        
+    except Exception as e:
+        logging.error(f" Error occurred (main): {e}")
 
 if __name__ == '__main__':
     try:
