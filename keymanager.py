@@ -306,28 +306,33 @@ Add a key to hosts in CSV:
 {appname} --identity ~/.ssh/id_ed25519 --host 192.168.12.34 --username superuser --add
 {appname} --identity ~/.ssh/id_ed25519 --csv hosts.csv --key key.txt --host 192.168.12.34 --username superuser --verify
 
-{appname} --help
-
 
 """
     print(examples)
+
+
+def helpandexit(parser):
+    print('')
+    parser.print_help()
+    exit(1)
 
 # Main function to perform tasks based on user-specified operations
 def main():
     parser = argparse.ArgumentParser(description='Manage SSH keys for multiple hosts from a CSV inventory file.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # Let's add some additional help 
     # Operational flags
-    parser.add_argument('--add', action='store_true', help='Add SSH keys to remote hosts')
-    parser.add_argument('--clean', action='store_true', help='Clean duplicate SSH keys from remote hosts')
-    parser.add_argument('--remove', action='store_true', help='Remove SSH key from remote hosts')
-    parser.add_argument('--removeall', action='store_true', help='Remove ALL SSH keys from remote hosts (This may be DANGEROUS!)')
-    parser.add_argument('--verify', action='store_true', help='Verify SSH connectivity to remote hosts. If key is successful, password is skipped. If key fails, password is attempted.')
+    parser.add_argument('--examples', action='store_true', help='(optional) Display examples')
+    parser.add_argument('--add', action='store_true', help='(optional) Add SSH keys to remote hosts')
+    parser.add_argument('--clean', action='store_true', help='(optional) Clean duplicate SSH keys from remote hosts')
+    parser.add_argument('--remove', action='store_true', help='(optional) Remove SSH key from remote hosts')
+    parser.add_argument('--removeall', action='store_true', help='(optional) Remove ALL SSH keys from remote hosts (This may be DANGEROUS!)')
+    parser.add_argument('--verify', action='store_true', help='(optional) Verify SSH connectivity to remote hosts. If key is successful, password is skipped. If key fails, password is attempted.')
     
     # SSH parameters
-    parser.add_argument('--username', type=str, help='SSH username (overrides CSV)')
-    parser.add_argument('--identity', type=str, help='Path to SSH public key')
-    parser.add_argument('--port', type=int, default=22, help='SSH port, default is 22')
-    parser.add_argument('--host', type=str, default="all", help='Specify a single host on which to perform SSH add, clean, remove, removeall, or verify operation')
+    parser.add_argument('--username', type=str, help='(optional) SSH username (overrides CSV)')
+    parser.add_argument('--identity', type=str, help='(optional) Path to SSH public key')
+    parser.add_argument('--port', type=int, default=22, help='(optional) SSH port, default is 22')
+    parser.add_argument('--host', type=str, default="all", help='(optional) Specify a single host on which to perform SSH add, clean, remove, removeall, or verify operation')
     
     # CSV file
     parser.add_argument('--csv', type=str, default='hosts.csv', required=False, help='Path to CSV file with host information')
@@ -343,29 +348,46 @@ def main():
         liner()
         examples()
         sys.exit(1)
+    
+    # Display example usage:
+    if args.examples:
+        examples()
+        exit(0)
+    
     try:
         if not args.verify and not args.add and not args.remove and not args.clean:
             logging.error("No operation specified. Use --add, --clean, --remove, or --verify.")
-            exit(1)
+            helpandexit(parser)
+        
+        if args.verify and not args.identity:
+            logging.info(f'Password will be used as SSH identity was not specified')
+        
+        # identity file must be specified for all uses of --add or --remove (including --removeall)
         if args.add or args.remove:
             if not args.identity:
                 logging.error(f'SSH private key (--identity) must be defined to add key to remote host(s)')
-                exit(1)
+                helpandexit(parser)
+        
+        # removall flag must be used with remove so as to prevent accidental removal of all SSH keys from specified hosts
+        if args.removeall and not args.remove:
+            logging.error(f'--removall must only be used in conjunction with --remove ')
+            helpandexit(parser)
+        
         if args.identity:
             if args.identity.endswith('.pub'):
                 logging.error(f'SSH Identity should not be a public key: {args.identity}')
                 identity = args.identity
-                exit(1)
+                helpandexit(parser)
             else:
                 identity = args.identity
             # Verify path exists for both private and public keys:
             if not os.path.exists(args.identity):
                 logging(f'SSH Identity path is invalid: {args.identity}\nPlease verify the path and re-run ')
-                exit(1)
+                helpandexit(parser)
             if not os.path.exists(f'{args.identity}.pub'):
                 logging(f'SSH Public key does not exist for identity: {args.identity}\nPlease verify the path and re-run ')
-                args.help()
-                exit(1)
+                helpandexit(parser)
+        
         # Check if the username is provided via command line
         cli_username = args.username
         cli_password = None
@@ -424,6 +446,7 @@ def main():
                 logging.debug(f'--verify operation completed for {username}@{host}:{port}')
             else:
                 logging.error("No operation specified. Use --add, --clean, --remove, or --verify.")
+                helpandexit(parser)
     except KeyboardInterrupt:
         logging.error(f'User cancelled operation')
 
