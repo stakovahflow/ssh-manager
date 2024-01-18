@@ -110,8 +110,8 @@ def read_csv(csv_file, keyfile):
 def clean_duplicate_ssh_keys(host, port, username, password):
     try:
         # Start an SSH session to the remote host
-        s = pxssh.pxssh()
-        s.login(host, username, password, port=int(port))
+        s = pxssh.pxssh(options={"StrictHostKeyChecking": "no","UserKnownHostsFile": "/dev/null"})
+        s.login(host, username, password, port=int(port), auto_prompt_reset=False)
 
         # Command to remove duplicate SSH keys
         # This command sorts the authorized_keys file and removes duplicate lines
@@ -147,8 +147,8 @@ def add_ssh_key(host, port, username, password, ssh_identity_path):
         public_key = get_public_key(ssh_identity_path)
         
         # Start an SSH session to the remote host
-        s = pxssh.pxssh()
-        s.login(host, username, password, port=int(port))
+        s = pxssh.pxssh(options={"StrictHostKeyChecking": "no","UserKnownHostsFile": "/dev/null"})
+        s.login(host, username, password, port=int(port), auto_prompt_reset=False)
 
         # Command to add the public key to authorized_keys
         command = f"unset HISTFILE && mkdir -p ~/.ssh && echo '{public_key}' >> ~/.ssh/authorized_keys"
@@ -165,8 +165,8 @@ def add_ssh_key(host, port, username, password, ssh_identity_path):
 def remove_ssh_key(host, port, username, password, ssh_identity_path, remove_all=False):
     try:
         # Start an SSH session to the remote host
-        s = pxssh.pxssh()
-        s.login(host, username, password, port=int(port))
+        s = pxssh.pxssh(options={"StrictHostKeyChecking": "no","UserKnownHostsFile": "/dev/null"})
+        s.login(host, username, password, port=int(port), auto_prompt_reset=False)
         if remove_all:
             logging.info(f"Removing authorized_keys from remote host(s)")
             # Command to remove ALL public keys from authorized_keys:
@@ -194,20 +194,21 @@ def verify_ssh(host, port, username, password, ssh_identity_path=None):
         if ssh_identity_path and os.path.exists(ssh_identity_path):
             try:
                 logging.debug(f"Attempting to connect to {host}:{port} using SSH key")
-                s = pxssh.pxssh(options={'IdentityFile': ssh_identity_path})
-                s.login(host, username, port=int(port))
+                s = pxssh.pxssh(options={"StrictHostKeyChecking": "no","UserKnownHostsFile": "/dev/null", 'IdentityFile': ssh_identity_path})
+                #s = pxssh.pxssh(options={'IdentityFile': ssh_identity_path})
+                s.login(host, username, port=int(port), auto_prompt_reset=False)
                 logging.info(f"Successfully connected to {host}:{port} using SSH key")
                 s.logout()
                 return
             except pxssh.ExceptionPxssh as e:
                 logging.info(f"SSH key login failed, falling back to password for {host}:{port}. Error: {e}")
-                s = pxssh.pxssh()
+                s = pxssh.pxssh(options={"StrictHostKeyChecking": "no","UserKnownHostsFile": "/dev/null"})
         else:
-            s = pxssh.pxssh()
+            s = pxssh.pxssh(options={"StrictHostKeyChecking": "no","UserKnownHostsFile": "/dev/null"})
 
         # Attempt to log in with password
         logging.debug(f"Attempting to connect to {host}:{port} using password")
-        s.login(host, username, password=password, port=int(port))
+        s.login(host, username, password=password, port=int(port), auto_prompt_reset=False)
         logging.info(f"Successfully connected to {host}:{port} using password")
         s.logout()
     except pxssh.ExceptionPxssh as e:
@@ -222,7 +223,7 @@ def verify_ssh_fail(host, port, username, password, ssh_identity_path=None):
     if ssh_identity_path:
         ssh_public_key = f'{ssh_identity_path}.pub'
     try:
-        s = pxssh.pxssh()
+        s = pxssh.pxssh(options={"StrictHostKeyChecking": "no","UserKnownHostsFile": "/dev/null"})
         # If an SSH key is provided and exists, set the IdentityFile option
         if ssh_identity_path and os.path.exists(ssh_identity_path):
             s.options['IdentityFile'] = ssh_identity_path
@@ -230,7 +231,7 @@ def verify_ssh_fail(host, port, username, password, ssh_identity_path=None):
         # Attempt to log in using the SSH key or password
         if ssh_identity_path and os.path.exists(ssh_identity_path):
             try:
-                s.login(host, username, port=int(port))
+                s.login(host, username, port=int(port), auto_prompt_reset=False)
                 logging.info(f"Successfully connected to {host}:{port} using SSH key")
                 s.logout()
                 return
@@ -241,7 +242,7 @@ def verify_ssh_fail(host, port, username, password, ssh_identity_path=None):
         # if use_cli_credentials:
         #    password = getpass.getpass(prompt="Enter SSH password: ")
 
-        s.login(host, username, password=password, port=int(port))
+        s.login(host, username, password=password, port=int(port), auto_prompt_reset=False)
         logging.info(f"Successfully connected to {host}:{port} using password")
         s.logout()
     except pxssh.ExceptionPxssh as e:
@@ -315,7 +316,7 @@ Add a key to hosts in CSV:
 def main():
     parser = argparse.ArgumentParser(description='Manage SSH keys for multiple hosts from a CSV inventory file.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # Let's add some additional help 
-    # Operation flags
+    # Operational flags
     parser.add_argument('--add', action='store_true', help='Add SSH keys to remote hosts')
     parser.add_argument('--clean', action='store_true', help='Clean duplicate SSH keys from remote hosts')
     parser.add_argument('--remove', action='store_true', help='Remove SSH key from remote hosts')
@@ -343,6 +344,9 @@ def main():
         examples()
         sys.exit(1)
     try:
+        if not args.verify and not args.add and not args.remove and not args.clean:
+            logging.error("No operation specified. Use --add, --clean, --remove, or --verify.")
+            exit(1)
         if args.add or args.remove:
             if not args.identity:
                 logging.error(f'SSH private key (--identity) must be defined to add key to remote host(s)')
@@ -389,7 +393,7 @@ def main():
         if not host_data:
             logging.error('No host data found in the CSV file or decryption failed.')
             return
-
+        
         # Perform operations based on the command-line arguments
         for host, port, username, decrypted_password in host_data:
             # Override username and password if provided via command line
@@ -425,3 +429,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+# Disabled Strict Hostkey checking:
+# s = pxssh.pxssh(options={"StrictHostKeyChecking": "no","UserKnownHostsFile": "/dev/null"})
