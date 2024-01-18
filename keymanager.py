@@ -533,7 +533,7 @@ if __name__ == '__main__':
         except KeyboardInterrupt:
             logging.debug(f'Blinker stopping')
         except Exception as e:
-            logging.debut(f'Blinker is exceptional')
+            logging.debug(f'Blinker is exceptional')
     except Exception as e:
         logging.error(f'An exception occurred when attempting to run {appname}. Please see the log for additional information: {logfile}')
             
