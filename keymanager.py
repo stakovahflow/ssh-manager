@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-# Last modified: 2024-01-10 @ 11:29 PM
-
+# Last modified: 2024-01-18 @ 01:15
 import csv
 import base64
 import argparse
@@ -15,17 +14,45 @@ import getpass
 from logging import StreamHandler
 import sys
 import shutil
+# Added these for the blinker:
+import time
+import threading
+import itertools
 
 # Get our application name:
 appname = sys.argv[0]
+
+# Set our version number
+verstion = '2024-01-18-003'
+
+# Set the path for our log file:
+logfile = 'ssh_manager.log'
+
+
+# Function to print a line the width of the terminal or 70 characters wide, depending on availability:
 def liner():
     # Get the size of the terminal
-    terminal_size = shutil.get_terminal_size(fallback=(80, 20))
+    terminal_size = shutil.get_terminal_size(fallback=(70, 20))
 
     # Print a line of dashes ("-") that matches the width of the terminal
     print("-" * terminal_size.columns)
-    
+
+# Print a first pretty line for our user:
 liner()
+
+# Let's throw the user a bone so they see the application is still running during time-heavy tasks
+# This function creates a blinking cursor to indicate that the application is operational:
+def blinker():
+    blinker_chars = itertools.cycle('- ')
+    while not stop_blinker:
+        sys.stdout.write(next(blinker_chars))  # write the next blinker character
+        sys.stdout.flush()
+        sys.stdout.write('\b')  # use backspace to stay at the end of the current line
+        time.sleep(0.2)
+        
+
+stop_blinker = True
+
 # Configure logging
 # logging.basicConfig(filename='ssh_manager.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -34,17 +61,19 @@ def setup_logging():
     log_format = '%(asctime)s - %(levelname)s - %(message)s'
     user_message_format = '%(message)s'
 
-    # File Handler - for log file
-    file_handler = logging.FileHandler('ssh_manager.log')
+    # Logging to file:
+    file_handler = logging.FileHandler(logfile)
     file_handler.setFormatter(logging.Formatter(log_format))
     file_handler.setLevel(logging.DEBUG)
 
-    # Stream Handler - for console output
+    # Logging to console:
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(logging.Formatter(user_message_format))
+    # May want to setup logging level (--verbose) flag in future iterations, from "INFO" to "DEBUG":
     stream_handler.setLevel(logging.INFO)
 
     # Get the root logger and add both handlers
+    # Setup our logging levels
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
     logger.addHandler(file_handler)
@@ -59,6 +88,11 @@ setup_logging()
 # Fernet key variable 
 cached_fernet_key = None
 
+# Why not add a blinker?:
+def spinning_cursor():
+    while True:
+        for cursor in '|/-\\':
+            yield cursor
 
 # Function to define read_fernet_key function
 def read_fernet_key(keyfile):
@@ -82,11 +116,11 @@ def decrypt_password(encrypted_password, keyfile):
     try:
         return fernet.decrypt(encrypted_password.encode()).decode()
     except Exception as e:
-        logging.error(f"Decryption error for password: {e}")
+        logging.error(f" Decryption error for password: {e}")
         return None
 
 
-# Function to read the CSV file and decode passwords
+# Function to read the CSV file and decrypt passwords
 def read_csv(csv_file, keyfile):
     data = []
     try:
@@ -110,7 +144,9 @@ def read_csv(csv_file, keyfile):
 def clean_duplicate_ssh_keys(host, port, username, password):
     try:
         # Start an SSH session to the remote host
+        # Disable strict host key checking and set the known_hosts to /dev/null
         s = pxssh.pxssh(options={"StrictHostKeyChecking": "no","UserKnownHostsFile": "/dev/null"})
+        # Disable auto_prompt_reset due to inconsistencies between shell types (primarily zsh and bash):
         s.login(host, username, password, port=int(port), auto_prompt_reset=False)
 
         # Command to remove duplicate SSH keys
@@ -119,12 +155,12 @@ def clean_duplicate_ssh_keys(host, port, username, password):
         s.sendline(command)
         s.prompt()  # Wait for the command to complete
 
-        logging.info(f"Duplicate SSH keys cleaned from {host}:{port}")
+        logging.info(f" Duplicate SSH keys cleaned from {host}:{port}")
         s.logout()
     except pxssh.ExceptionPxssh as e:
-        logging.error(f"pxssh failed on login. {e}")
+        logging.error(f" pxssh failed on login. {e}")
     except Exception as e:
-        logging.error(f"Error cleaning duplicate SSH keys from {host}:{port}: {e}")
+        logging.error(f" Error cleaning duplicate SSH keys from {host}:{port}: {e}")
 
 
 # Function to read the public key from the file
@@ -134,7 +170,7 @@ def get_public_key(ssh_identity_path):
         with open(ssh_public_key_path, 'r') as file:
             ssh_public_key = file.read().strip()
         file.close()
-        logging.info(f'Successfully retrieved ssh public key contents: {ssh_public_key_path}')
+        logging.debug(f'Successfully retrieved ssh public key contents: {ssh_public_key_path}')
         return(ssh_public_key)
     else:
         logging.error(f'Please ensure public key exists: {ssh_public_key_path}')
@@ -147,45 +183,51 @@ def add_ssh_key(host, port, username, password, ssh_identity_path):
         public_key = get_public_key(ssh_identity_path)
         
         # Start an SSH session to the remote host
+        # Disable strict host key checking and set the known_hosts to /dev/null
         s = pxssh.pxssh(options={"StrictHostKeyChecking": "no","UserKnownHostsFile": "/dev/null"})
+        
+        # Disable auto_prompt_reset due to inconsistencies between shell types (primarily zsh and bash):
         s.login(host, username, password, port=int(port), auto_prompt_reset=False)
 
         # Command to add the public key to authorized_keys
         command = f"unset HISTFILE && mkdir -p ~/.ssh && echo '{public_key}' >> ~/.ssh/authorized_keys"
         s.sendline(command)
         s.prompt()  # Wait for the command to complete
-        logging.info(f"SSH key copied to {host}:{port}")
+        logging.info(f" SSH key copied to {host}:{port}")
         s.logout()
     except pxssh.ExceptionPxssh as e:
-        logging.error(f"pxssh failed on login. {e}")
+        logging.error(f" pxssh failed on login. {e}")
     except Exception as e:
-        logging.error(f"Error copying SSH key to {host}:{port}: {e}")
+        logging.error(f" Error copying SSH key to {host}:{port}: {e}")
 
 
 def remove_ssh_key(host, port, username, password, ssh_identity_path, remove_all=False):
     try:
         # Start an SSH session to the remote host
+        # Disable strict host key checking and set the known_hosts to /dev/null
         s = pxssh.pxssh(options={"StrictHostKeyChecking": "no","UserKnownHostsFile": "/dev/null"})
+        
+        # Disable auto_prompt_reset due to inconsistencies between shell types (primarily zsh and bash):
         s.login(host, username, password, port=int(port), auto_prompt_reset=False)
         if remove_all:
-            logging.info(f"Removing authorized_keys from remote host(s)")
+            logging.debug(f" Removing authorized_keys from remote host {host}")
             # Command to remove ALL public keys from authorized_keys:
             command = f"unset HISTFILE && rm -rf ~/.ssh/authorized_keys"
         else:
             # Read the public key from the file
             public_key = get_public_key(ssh_identity_path)
-            logging.info(f"Removing {ssh_identity_path} from authorized_keys on remote host(s)")
+            logging.info(f" Removing {ssh_identity_path} from authorized_keys on remote host")
             # Command to remove the specified public key from authorized_keys
             command = f"unset HISTFILE && grep -v '{public_key}' ~/.ssh/authorized_keys > ~/.ssh/authorized_keys_tmp && mv ~/.ssh/authorized_keys_tmp ~/.ssh/authorized_keys"
         s.sendline(command)
         s.prompt()  # Wait for it...
 
-        logging.info(f"SSH key removed from {host}:{port}")
+        logging.info(f" SSH key removed from {host}:{port}")
         s.logout()
     except pxssh.ExceptionPxssh as e:
-        logging.error(f"pxssh failed on login. {e}")
+        logging.error(f" pxssh failed on login. {e}")
     except Exception as e:
-        logging.error(f"Error removing SSH key from {host}:{port}: {e}")
+        logging.error(f" Error removing SSH key from {host}:{port}: {e}")
 
 
 def verify_ssh(host, port, username, password, ssh_identity_path=None):
@@ -193,36 +235,45 @@ def verify_ssh(host, port, username, password, ssh_identity_path=None):
         # If an SSH key is provided and exists, set the IdentityFile option
         if ssh_identity_path and os.path.exists(ssh_identity_path):
             try:
-                logging.debug(f"Attempting to connect to {host}:{port} using SSH key")
+                logging.debug(f" Attempting to connect to {host}:{port} using SSH key")
+                # Disable strict host key checking and set the known_hosts to /dev/null
                 s = pxssh.pxssh(options={"StrictHostKeyChecking": "no","UserKnownHostsFile": "/dev/null", 'IdentityFile': ssh_identity_path})
                 #s = pxssh.pxssh(options={'IdentityFile': ssh_identity_path})
+                
+                # Disable auto_prompt_reset due to inconsistencies between shell types (primarily zsh and bash):
                 s.login(host, username, port=int(port), auto_prompt_reset=False)
-                logging.info(f"Successfully connected to {host}:{port} using SSH key")
+                logging.info(f" Successfully connected to {host}:{port} using SSH key")
                 s.logout()
                 return
             except pxssh.ExceptionPxssh as e:
-                logging.info(f"SSH key login failed, falling back to password for {host}:{port}. Error: {e}")
+                logging.info(f" SSH key login failed, falling back to password for {host}:{port}. Error: {e}")
+                # Disable strict host key checking and set the known_hosts to /dev/null
                 s = pxssh.pxssh(options={"StrictHostKeyChecking": "no","UserKnownHostsFile": "/dev/null"})
         else:
+            # Disable strict host key checking and set the known_hosts to /dev/null
             s = pxssh.pxssh(options={"StrictHostKeyChecking": "no","UserKnownHostsFile": "/dev/null"})
 
         # Attempt to log in with password
-        logging.debug(f"Attempting to connect to {host}:{port} using password")
+        logging.debug(f" Attempting to connect to {host}:{port} using password")
+        
+        # Disable auto_prompt_reset due to inconsistencies between shell types (primarily zsh and bash):
         s.login(host, username, password=password, port=int(port), auto_prompt_reset=False)
-        logging.info(f"Successfully connected to {host}:{port} using password")
+        logging.info(f" Successfully connected to {host}:{port} using password")
         s.logout()
     except pxssh.ExceptionPxssh as e:
-        logging.error(f"pxssh failed on login to {host}:{port}. {e}")
+        logging.error(f" pxssh failed on login to {host}:{port}. {e}")
         s.close()
     except Exception as e:
-        logging.error(f"Error connecting to {host}:{port}: {e}")
+        logging.error(f" Error connecting to {host}:{port}: {e}")
         s.close()
 
 
 def verify_ssh_fail(host, port, username, password, ssh_identity_path=None):
+    # Specify our public key path, based on the path of our private key:
     if ssh_identity_path:
         ssh_public_key = f'{ssh_identity_path}.pub'
     try:
+        # Disable strict host key checking and set the known_hosts to /dev/null
         s = pxssh.pxssh(options={"StrictHostKeyChecking": "no","UserKnownHostsFile": "/dev/null"})
         # If an SSH key is provided and exists, set the IdentityFile option
         if ssh_identity_path and os.path.exists(ssh_identity_path):
@@ -231,25 +282,23 @@ def verify_ssh_fail(host, port, username, password, ssh_identity_path=None):
         # Attempt to log in using the SSH key or password
         if ssh_identity_path and os.path.exists(ssh_identity_path):
             try:
+                # Disable auto_prompt_reset due to inconsistencies between shell types (primarily zsh and bash):
                 s.login(host, username, port=int(port), auto_prompt_reset=False)
-                logging.info(f"Successfully connected to {host}:{port} using SSH key")
+                logging.info(f" Successfully connected to {host}:{port} using SSH key")
                 s.logout()
                 return
             except pxssh.ExceptionPxssh as e:
-                logging.info(f"SSH key login failed, falling back to password for {host}:{port}. Error: {e}")
-
-        # If CLI credentials are used or SSH key login failed, use password
-        # if use_cli_credentials:
-        #    password = getpass.getpass(prompt="Enter SSH password: ")
-
+                logging.info(f" SSH key login failed, falling back to password for {host}:{port}. Error: {e}")
+        
+        # Disable auto_prompt_reset due to inconsistencies between shell types (primarily zsh and bash):
         s.login(host, username, password=password, port=int(port), auto_prompt_reset=False)
-        logging.info(f"Successfully connected to {host}:{port} using password")
+        logging.info(f" Successfully connected to {host}:{port} using password")
         s.logout()
     except pxssh.ExceptionPxssh as e:
-        logging.error(f"pxssh failed on login to {host}:{port}. {e}")
+        logging.error(f" pxssh failed on login to {host}:{port}. {e}")
         s.close()
     except Exception as e:
-        logging.error(f"Error connecting to {host}:{port}: {e}")
+        logging.error(f" Error connecting to {host}:{port}: {e}")
         s.close()
 
 
@@ -321,12 +370,13 @@ def main():
     parser = argparse.ArgumentParser(description='Manage SSH keys for multiple hosts from a CSV inventory file.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # Let's add some additional help 
     # Operational flags
-    parser.add_argument('--examples', action='store_true', help='(optional) Display examples')
-    parser.add_argument('--add', action='store_true', help='(optional) Add SSH keys to remote hosts')
-    parser.add_argument('--clean', action='store_true', help='(optional) Clean duplicate SSH keys from remote hosts')
-    parser.add_argument('--remove', action='store_true', help='(optional) Remove SSH key from remote hosts')
-    parser.add_argument('--removeall', action='store_true', help='(optional) Remove ALL SSH keys from remote hosts (This may be DANGEROUS!)')
-    parser.add_argument('--verify', action='store_true', help='(optional) Verify SSH connectivity to remote hosts. If key is successful, password is skipped. If key fails, password is attempted.')
+    ops = parser.add_mutually_exclusive_group()
+    ops.add_argument('--examples', action='store_true', help='(optional) Display examples')
+    ops.add_argument('--add', action='store_true', help='(optional) Add SSH keys to remote hosts')
+    ops.add_argument('--clean', action='store_true', help='(optional) Clean duplicate SSH keys from remote hosts')
+    ops.add_argument('--remove', action='store_true', help='(optional) Remove SSH key from remote hosts')
+    ops.add_argument('--removeall', action='store_true', help='(optional) Remove ALL SSH keys from remote hosts (This may be DANGEROUS!)')
+    ops.add_argument('--verify', action='store_true', help='(optional) Verify SSH connectivity to remote hosts. If key is successful, password is skipped. If key fails, password is attempted.')
     
     # SSH parameters
     parser.add_argument('--username', type=str, help='(optional) SSH username (overrides CSV)')
@@ -367,13 +417,17 @@ def main():
             if not args.identity:
                 logging.error(f'SSH private key (--identity) must be defined to add key to remote host(s)')
                 helpandexit(parser)
-        
+        if args.remove and args.removeall and args.identity:
+            logging.info(f'Removing {args.identity} from hosts')
+        if args.remove and args.identity:
+            logging.info(f'Removing {args.identity} from hosts')
         # removall flag must be used with remove so as to prevent accidental removal of all SSH keys from specified hosts
         if args.removeall and not args.remove:
             logging.error(f'--removall must only be used in conjunction with --remove ')
             helpandexit(parser)
         
         if args.identity:
+            # Verify that we're looking only at a private key (identity), not a public key:
             if args.identity.endswith('.pub'):
                 logging.error(f'SSH Identity should not be a public key: {args.identity}')
                 identity = args.identity
@@ -381,9 +435,11 @@ def main():
             else:
                 identity = args.identity
             # Verify path exists for both private and public keys:
+            # Verify the identity file exists:
             if not os.path.exists(args.identity):
                 logging(f'SSH Identity path is invalid: {args.identity}\nPlease verify the path and re-run ')
                 helpandexit(parser)
+            # Verify the public key file exists:
             if not os.path.exists(f'{args.identity}.pub'):
                 logging(f'SSH Public key does not exist for identity: {args.identity}\nPlease verify the path and re-run ')
                 helpandexit(parser)
@@ -419,6 +475,16 @@ def main():
         # Perform operations based on the command-line arguments
         for host, port, username, decrypted_password in host_data:
             # Override username and password if provided via command line
+            # Start the blinker to spinning:
+            global stop_blinker
+            stop_blinker = False
+            try:
+                blinker_thread = threading.Thread(target=blinker)
+                blinker_thread.start()
+            except KeyboardInterrupt:
+                logging.debug(f'Process terminated by user')
+            except Exception as e:
+                logging.error(f' Error with threading for blinker. Not a show-stopper')
             if cli_username:
                 username = cli_username
                 decrypted_password = cli_password
@@ -447,12 +513,28 @@ def main():
             else:
                 logging.error("No operation specified. Use --add, --clean, --remove, or --verify.")
                 helpandexit(parser)
+            stop_blinker = True
+            blinker_thread.join()
+            sys.stdout.write('\b \b')  # Ensure cursor is reset to space
     except KeyboardInterrupt:
+        stop_blinker = True
+        blinker_thread.join()
         logging.error(f'User cancelled operation')
+        
 
 if __name__ == '__main__':
-    main()
-
-
-# Disabled Strict Hostkey checking:
-# s = pxssh.pxssh(options={"StrictHostKeyChecking": "no","UserKnownHostsFile": "/dev/null"})
+    try:
+        main()
+    except KeyboardInterrupt:
+        try:
+            stop_blinker = True
+            blinker_thread.join()
+        except KeyboardInterrupt:
+            logging.debug(f'Blinker stopping')
+        except Exception as e:
+            logging.debut(f'Blinker is exceptional')
+    except Exception as e:
+        logging.error(f'An exception occurred when attempting to run {appname}. Please see the log for additional information: {logfile}')
+            
+    print("Done!")
+    liner()
