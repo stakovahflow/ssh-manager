@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-VERSION='2024-03-06-f'
+VERSION='2024-03-06-g'
 import re
 from pexpect import pxssh
 import time
@@ -11,7 +11,7 @@ import logging
 from logging import StreamHandler
 
 # Set the path for our log file:
-logfile = 'interface.log'
+logfile = '/tmp/interface.log'
 
 if len(sys.argv) != 2:
     print('Please provide a host list')
