@@ -13,21 +13,16 @@ from logging import StreamHandler
 # Set the path for our log file:
 logfile = 'interface.log'
 
-open_square = "["
-close_square = "]"
-
 if len(sys.argv) != 2:
     print('Please provide a host list')
     exit(0)
 else:
     host_file=sys.argv[1]
 
-def remove_brackets(string, open_square, close_square):
-    return re.sub(r'[{}{}]'.format(re.escape(open_square), re.escape(close_square)), '', string)
+# Statically assigned username:
+USERNAME = input("Username: ")
 
-# Statically assigned username and password
-USERNAME = "silentdefense"
-
+# Get password from user
 PASSWORD = getpass(f"{USERNAME} SSH password: ")
 
 bigcommand = """for interface in $(ip -br a | grep -v "^docker\|^lo\|^veth" | awk '{print $1}'); do
@@ -37,6 +32,9 @@ bigcommand = """for interface in $(ip -br a | grep -v "^docker\|^lo\|^veth" | aw
         echo "[$HOSTNAME,$A,$B]";
 done
 """
+
+# Create an information collection list:
+all_interface_info = []
 
 # Configure logging to output to both file and console
 def setup_logging():
@@ -64,19 +62,22 @@ def setup_logging():
 # Call the function to set up logging at the start of your script
 setup_logging()
 
-# getinterfaces:
+# Get interfaces list from remote hosts:
 getinterfaces = """ip -br a | grep -v "^docker\|^lo\|^veth" | awk '{print "Interface: " $1}'"""
 
+# Function to get MAC addresses from remote hosts:
 def getmacaddress(interface):
     getmacoutput = """ip -br link show dev %s | grep -E '([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})' | awk '{print "MAC_ADDRESS: " $3}'""" % interface
     logging.debug(getmacoutput)
     return(getmacoutput)
 
+# Function to get IP addresses from remote hosts:
 def getipaddress(interface):
     getipoutput = """ip -br addr show dev %s | grep '[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}' | awk '{print "IP_ADDRESS: " $3}'""" % interface
     logging.debug(getipoutput)
     return(getipoutput)
 
+# Function to scrape data from remote hosts, leveraging getmacaddress() and getipaddress():
 def run_command_on_remote(hostaddress, username, password):
     hostaddress = hostaddress.strip()
     logging.debug(f'Host: {hostaddress}')
@@ -135,19 +136,21 @@ def run_command_on_remote(hostaddress, username, password):
         client.logout()
         return interface_info
     except pxssh.ExceptionPxssh as e:
-        print(f"SSH login to {hostaddress} failed: {e}")
+        logging.info(f'SSH login to {hostaddress} failed')
+        logging.debug(f"SSH login to {hostaddress} failed: {e}")
         return None
     child.logfile.close()
-
-# Collect interface information for each remote system
-all_interface_info = []
 
 # Read list of remote systems
 with open (host_file, mode='r', newline='') as remote_systems:
     for system in remote_systems:
-        interface_info = run_command_on_remote(system, USERNAME, PASSWORD)
-        if interface_info:
-            all_interface_info.extend(interface_info)
+        try:
+            interface_info = run_command_on_remote(system, USERNAME, PASSWORD)
+            if interface_info:
+                all_interface_info.extend(interface_info)
+        except Exception as e:
+            logging.error(f'An error occurred when attempting to access {system}: {e}')
+
 
 # Write interface information to a CSV file
 csv_file = "host_interfaces.csv"
