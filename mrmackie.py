@@ -63,7 +63,7 @@ def setup_logging():
 setup_logging()
 
 # Get interfaces list from remote hosts:
-getinterfaces = """ip -br a | grep -v "^docker\|^lo\|^veth" | awk '{print "Interface: " $1}'"""
+getinterfaces = """ip -br a | grep -v "^docker\|^lo\|^veth" | awk '{print "Interface: " $1}' | sort"""
 
 # Function to get MAC addresses from remote hosts:
 def getmacaddress(interface):
