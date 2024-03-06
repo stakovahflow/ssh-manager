@@ -131,8 +131,8 @@ def run_command_on_remote(hostaddress, username, password):
                         logging.debug(f'Hostname: {hostname}, Interface:{interfacename}, IP:{ip_address}')
                         ip_addresses.append(ip_address)
                 # Append our interface_info dictionary with the data we've collected:
-                interface_info.append({'Hostname': hostname, 'Interface': interfacename, 'MAC Address': ', '.join(mac_addresses), 'IP Address': ', '.join(ip_addresses)})
-                logging.info(f'Hostname: {hostname}, Interface: {interfacename}, MAC Address: {mac_addresses}, IP Address: {ip_addresses}')
+                interface_info.append({'Host': hostaddress, 'Hostname': hostname, 'Interface': interfacename, 'MAC Address': ', '.join(mac_addresses), 'IP Address': ', '.join(ip_addresses)})
+                logging.info(f'Host: {hostaddress}, Hostname: {hostname}, Interface: {interfacename}, MAC Address: {mac_addresses}, IP Address: {ip_addresses}')
         client.logout()
         return interface_info
     except KeyboardInterrupt:
@@ -158,7 +158,7 @@ with open (host_file, mode='r', newline='') as remote_systems:
 # Write interface information to a CSV file
 csv_file = "host_interfaces.csv"
 with open(csv_file, mode='w', newline='') as file:
-    writer = csv.DictWriter(file, fieldnames=["Hostname", "Interface", "MAC Address", "IP Address"])
+    writer = csv.DictWriter(file, fieldnames=["Host", "Hostname", "Interface", "MAC Address", "IP Address"])
     writer.writeheader()
     writer.writerows(all_interface_info)
 
