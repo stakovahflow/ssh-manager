@@ -135,9 +135,12 @@ def run_command_on_remote(hostaddress, username, password):
                 logging.info(f'Hostname: {hostname}, Interface: {interfacename}, MAC Address: {mac_addresses}, IP Address: {ip_addresses}')
         client.logout()
         return interface_info
+    except KeyboardInterrupt:
+        logging.info(f'Operation cancelled by user')
+        exit(1)
     except pxssh.ExceptionPxssh as e:
         logging.info(f'SSH login to {hostaddress} failed')
-        logging.debug(f"SSH login to {hostaddress} failed: {e}")
+        logging.debug(f"{e}")
         return None
     child.logfile.close()
 
